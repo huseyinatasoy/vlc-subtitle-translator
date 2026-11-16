@@ -43,6 +43,7 @@ class Settings(dict):
         'password': '',
         'pause_on_hover': True,
         'hide_vlc_subs': True,
+        'cue_keys': 'ad',  # önceki/sonraki altyazı kısayolu (bkz. osutil.HOTKEY_PRESETS)
         'source_lang': 'en',
         'target_lang': 'tr',
         'provider': 'free',

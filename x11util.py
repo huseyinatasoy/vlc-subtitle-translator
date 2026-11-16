@@ -6,6 +6,7 @@ VLC 3 ve Tk XWayland üzerinden çalıştığı için çoğunlukla yine çalış
 import ctypes
 import ctypes.util
 import os
+import threading
 from collections import namedtuple
 
 OWN_PID = os.getpid()
@@ -212,6 +213,103 @@ def _bar_top(rect, others):
             if o[0] >= l and o[2] <= r and o[3] <= b + 2
             and o[1] > t + (b - t) * 2 // 3 and o[3] - o[1] < (b - t) // 4]
     return min(tops) if tops else None
+
+
+class _XKeyEvent(ctypes.Structure):
+    _fields_ = [('type', ctypes.c_int), ('serial', ctypes.c_ulong), ('send_event', ctypes.c_int),
+                ('display', ctypes.c_void_p), ('window', Window), ('root', Window),
+                ('subwindow', Window), ('time', ctypes.c_ulong), ('x', ctypes.c_int),
+                ('y', ctypes.c_int), ('x_root', ctypes.c_int), ('y_root', ctypes.c_int),
+                ('state', ctypes.c_uint), ('keycode', ctypes.c_uint), ('same_screen', ctypes.c_int)]
+
+
+class _XEvent(ctypes.Union):
+    _fields_ = [('type', ctypes.c_int), ('xkey', _XKeyEvent), ('pad', ctypes.c_long * 24)]
+
+
+_MODS = {'shift': 0x1, 'ctrl': 0x4, 'alt': 0x8}
+_IGNORED = (0, 0x2, 0x10, 0x12)  # CapsLock / NumLock açık olsa da çalışsın
+_KEYSYM = {'a': 0x61, 'd': 0x64, 'left': 0xff51, 'right': 0xff53}
+KEY_PRESS = 2
+
+
+class Hotkeys:
+    """Sistem genelinde kısayol tuşları (XGrabKey), kendi X bağlantısı ve thread'iyle.
+
+    Yakalanan tuş başka programa gitmez; bu yüzden sadece gerektiğinde (VLC öndeyken)
+    `update(..., active=True)` çağrılmalı. callback kısayol thread'inden çağrılır.
+    """
+
+    def __init__(self, callback):
+        self.callback = callback
+        self._state = ((), False)
+        self._dirty = threading.Event()
+        try:
+            x = self.lib = ctypes.CDLL(ctypes.util.find_library('X11') or 'libX11.so.6')
+        except OSError:
+            return
+        x.XOpenDisplay.restype = ctypes.c_void_p
+        x.XOpenDisplay.argtypes = [ctypes.c_char_p]
+        x.XDefaultRootWindow.restype = Window
+        x.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
+        x.XKeysymToKeycode.restype = ctypes.c_ubyte
+        x.XKeysymToKeycode.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+        x.XGrabKey.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_uint, Window,
+                               ctypes.c_int, ctypes.c_int, ctypes.c_int]
+        x.XUngrabKey.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_uint, Window]
+        x.XPending.argtypes = [ctypes.c_void_p]
+        x.XNextEvent.argtypes = [ctypes.c_void_p, ctypes.POINTER(_XEvent)]
+        x.XSync.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        x.XSetErrorHandler.restype = ctypes.c_void_p
+        x.XSetErrorHandler.argtypes = [ctypes.c_void_p]
+        self.dpy = x.XOpenDisplay(None)
+        if not self.dpy:
+            return
+        # Tuşu başka program zaten yakalamışsa (BadAccess) program kapanmasın.
+        self._on_error = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p)(lambda d, e: 0)
+        x.XSetErrorHandler(ctypes.cast(self._on_error, ctypes.c_void_p))
+        self.root = x.XDefaultRootWindow(self.dpy)
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def update(self, bindings, active):
+        """bindings: [(değiştiriciler, tuş, değer)], ör. (('ctrl',), 'left', -1)."""
+        self._state = (tuple(bindings), bool(active))
+        self._dirty.set()
+
+    def _run(self):
+        x, dpy, root = self.lib, self.dpy, self.root
+        live = {}  # (keycode, mods) -> değer
+        ev = _XEvent()
+        while True:
+            if self._dirty.is_set():
+                self._dirty.clear()
+                for code, mods in live:
+                    for extra in _IGNORED:
+                        x.XUngrabKey(dpy, code, mods | extra, root)
+                live.clear()
+                bindings, active = self._state
+                if active:
+                    for mods, key, value in bindings:
+                        code = x.XKeysymToKeycode(dpy, _KEYSYM[key])
+                        mask = 0
+                        for m in mods:
+                            mask |= _MODS[m]
+                        if code:
+                            for extra in _IGNORED:
+                                x.XGrabKey(dpy, code, mask | extra, root, True, 1, 1)
+                            live[(code, mask)] = value
+                x.XSync(dpy, False)
+            while x.XPending(dpy):
+                x.XNextEvent(dpy, ctypes.byref(ev))
+                if ev.type == KEY_PRESS:
+                    k = ev.xkey
+                    value = live.get((k.keycode, k.state & 0xD))  # sadece Shift/Ctrl/Alt
+                    if value is not None:
+                        try:
+                            self.callback(value)
+                        except Exception:
+                            pass
+            self._dirty.wait(0.05)
 
 
 def find_vlc():

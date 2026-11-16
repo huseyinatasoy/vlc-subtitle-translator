@@ -58,19 +58,7 @@ Program sadece üzerine geldiğin kelimeyi (ve "Cümleyi çevir" dediğin cümle
 önbelleğe yazar. Aynı kelime ikinci kez çevrilmez. Bu yüzden ücretsiz kotalar normal kullanımda
 fazlasıyla yeter.
 
-### Seçenek 1: DeepL API Free (önerilen)
-
-Ayda 500.000 karakter ücretsiz.
-
-1. <https://www.deepl.com/pro-api> adresinde **DeepL API Free** planına kaydol.
-   (Kimlik doğrulama için kart istenebilir; Free planda ücret alınmaz.)
-2. Hesabında **API Keys** bölümünden anahtarını kopyala. Free anahtarlar `:fx` ile biter.
-3. Programda **Çeviri** sekmesinde **DeepL API**'yi seç, anahtarı yapıştır, **Test et**'e bas.
-
-DeepL'in desteklemediği bir dil çifti seçersen çeviri penceresinde hata görürsün.
-O zaman Google Cloud'u kullan.
-
-### Seçenek 2: Google Cloud Translation API
+### Seçenek 1: Google Cloud Translation API (önerilen)
 
 Ayda 500.000 karakter ücretsiz, sonrası ücretli. Daha çok dil destekler.
 
@@ -84,12 +72,24 @@ Ayda 500.000 karakter ücretsiz, sonrası ücretli. Daha çok dil destekler.
 
 Güncel ücretleri ve kotaları servislerin kendi sayfalarından kontrol et.
 
+### Seçenek 2: DeepL API
+
+DeepL, **API Free** planını 2026'da yeni kayıtlara kapattı. Eski Free anahtarlar (`:fx` ile
+biter) çalışmaya devam eder. Yeni hesaplar <https://www.deepl.com/pro-api> adresinden
+**Developer** ya da **Growth** planıyla anahtar alır; program iki anahtar türünü de destekler.
+
+1. DeepL hesabında **API Keys** bölümünden anahtarını kopyala.
+2. Programda **Çeviri** sekmesinde **DeepL API**'yi seç, anahtarı yapıştır, **Test et**'e bas.
+
+DeepL'in desteklemediği bir dil çifti seçersen çeviri penceresinde hata görürsün.
+O zaman Google Cloud'u kullan.
+
 ### Anahtarsız mod (sadece denemek için)
 
 Anahtar girmeden denemek istersen **Anahtarsız** seçeneği Google Translate'in herkese açık,
 **resmi olmayan** ucunu (olmazsa MyMemory'yi) kullanır. Bu uç belgelenmemiştir. Çok istek
 gönderen IP'leri geçici olarak engelleyebilir ve her an çalışmayı bırakabilir. Düzenli kullanım
-için kendi anahtarınla DeepL ya da Google Cloud'u seç.
+için kendi anahtarınla Google Cloud ya da DeepL'u seç.
 
 ## Kullanım
 
@@ -105,6 +105,17 @@ için kendi anahtarınla DeepL ya da Google Cloud'u seç.
 Altyazı, VLC penceresi öndeyken görünür, başka bir pencereye geçince gizlenir. Tam ekranda da
 çalışır, VLC'nin alttaki oynatma çubuğuyla çakışmaz. VLC'de altyazı gecikmesini (H / G tuşları)
 değiştirirsen program da buna uyar.
+
+### Önceki / sonraki altyazıya atlama
+
+VLC öndeyken **A** ekrandaki (ya da bir önceki) altyazı satırının başına, **D** bir sonraki satıra
+atlar. Ana sayfadaki **Davranış** bölümünden Ctrl / Shift / Alt + ← / → seçebilir ya da kapatabilirsin.
+Seçilen tuşlar VLC'deki normal işlevlerinin yerine geçer.
+
+### Kart oyunu
+
+Ana sayfadaki **Kart oyunu**, Bilmiyorum ve Öğreniyorum kelimelerini (ya da seçtiğin başka bir
+grubu) kart olarak gösterir. Karta tıkla (ya da Boşluk) ve çevirisini gör; ← → ile kartlar arasında gez.
 
 ## Görünüm
 
@@ -132,12 +143,13 @@ ve en fazla genişlik.
 | `languages.py` | Desteklenen diller |
 | `i18n.py` | Arayüz dili (Türkçe / İngilizce) |
 | `words_window.py` | Kelimelerim / Favoriler penceresi |
+| `flashcards.py` | Kart oyunu penceresi |
 | `subtitles.py` | Altyazı okuma ve bulma |
 | `storage.py` | Kelimelerin, ayarların ve çeviri önbelleğinin kaydı |
 | `theme.py` | Koyu arayüz teması |
 | `vlc_client.py` | VLC web arayüzüyle iletişim |
 | `vlc_setup.py` | VLC ayar dosyasını düzenleme |
-| `osutil.py`, `winutil.py`, `x11util.py` | VLC penceresini takip etme (Windows / Linux) |
+| `osutil.py`, `winutil.py`, `x11util.py` | VLC penceresini takip etme, kısayol tuşları (Windows / Linux) |
 
 Kişisel veriler `data/` klasöründe tutulur ve git'e eklenmez:
 `ayarlar.json` (VLC şifresi, API anahtarları), `kelimeler.json` (renkler, favoriler; yedeklemek

@@ -92,6 +92,23 @@ EN = {
     'renklendir, ☆ ile favorile. Favoriler altı çizili görünür.':
         'Hover a word → see its translation. Color it as Known / Learning / Unknown, '
         'add it to favorites with ☆. Favorites are underlined.',
+    '❏  Kart oyunu': '❏  Flashcards',
+    'Önceki / sonraki altyazı kısayolu': 'Previous / next subtitle shortcut',
+    'Kapalı': 'Off',
+    "Sadece VLC öndeyken çalışır ve o tuşun VLC'deki işlevinin yerine geçer.":
+        "Works only while VLC is in front, and replaces that key's function in VLC.",
+
+    # kart oyunu
+    'Kart oyunu': 'Flashcards',
+    'Bilmiyorum + Öğreniyorum': 'Unknown + Learning',
+    '‹  Önceki': '‹  Previous',
+    'Sonraki  ›': 'Next  ›',
+    'Karıştır': 'Shuffle',
+    'Kartı çevirmek için tıkla ya da Boşluk · ← → ile gez':
+        'Click the card or press Space to flip · ← → to browse',
+    'çevirmek için tıkla': 'click to flip',
+    'Bu grupta kelime yok.\nAltyazıda kelimelerin üzerine gelip renklendir.':
+        'No words in this group.\nHover words in the subtitles and color them.',
 
     # görünüm
     'ÖNİZLEME': 'PREVIEW',
@@ -122,7 +139,9 @@ EN = {
     'saklanır ve sadece seçtiğin servise gönderilir.':
         'Use your own API key. The key is stored only on this computer (data/ayarlar.json) '
         'and is sent only to the service you choose.',
-    'DeepL API (Free ya da Pro anahtarı)': 'DeepL API (Free or Pro key)',
+    'Google Cloud Translation API (önerilen, ayda 500.000 karakter ücretsiz)':
+        'Google Cloud Translation API (recommended, 500,000 characters/month free)',
+    'DeepL API (kendi anahtarın)': 'DeepL API (your own key)',
     'Anahtarsız (resmi değil, sınırlı, her an bozulabilir; sadece denemek için)':
         'No key (unofficial, limited, may break at any time; for trying out only)',
     'API anahtarı': 'API key',

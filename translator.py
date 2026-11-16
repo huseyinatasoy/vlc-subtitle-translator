@@ -1,6 +1,7 @@
 """Çeviri servisleri.
 
-- 'deepl'  : DeepL API (kullanıcının kendi anahtarı; Free ve Pro anahtarları desteklenir)
+- 'deepl'  : DeepL API (kullanıcının kendi anahtarı). Eski "API Free" anahtarları (`:fx` ile biter)
+             api-free.deepl.com'a, diğerleri (Developer/Growth/Pro) api.deepl.com'a gider.
 - 'google' : Google Cloud Translation API v2 (kullanıcının kendi anahtarı)
 - 'free'   : anahtarsız Google Translate ucu, olmazsa MyMemory. Resmi değildir,
              her an çalışmayı bırakabilir; sadece denemek için.

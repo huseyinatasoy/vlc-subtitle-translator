@@ -57,19 +57,7 @@ The program only translates the word you hover (and the sentence when you click 
 sentence"), and caches the result. The same word is never translated twice, so the free quotas
 are more than enough for normal use.
 
-### Option 1: DeepL API Free (recommended)
-
-500,000 characters per month for free.
-
-1. Sign up for **DeepL API Free** at <https://www.deepl.com/pro-api>.
-   (A card may be requested for verification; the Free plan is not charged.)
-2. Copy your key from **API Keys** in your account. Free keys end with `:fx`.
-3. In the program, on the **Translation** tab, choose **DeepL API**, paste the key and press **Test**.
-
-If you pick a language pair DeepL doesn't support, you'll see an error in the translation popup.
-Use Google Cloud in that case.
-
-### Option 2: Google Cloud Translation API
+### Option 1: Google Cloud Translation API (recommended)
 
 500,000 characters per month for free, paid after that. Supports more languages.
 
@@ -82,12 +70,24 @@ Use Google Cloud in that case.
 
 Check current prices and quotas on the services' own pages.
 
+### Option 2: DeepL API
+
+DeepL stopped offering the **API Free** plan to new sign-ups in 2026. Old Free keys
+(ending with `:fx`) keep working. New accounts get a key from the **Developer** or **Growth**
+plan at <https://www.deepl.com/pro-api>; the program supports both key types.
+
+1. Copy your key from **API Keys** in your DeepL account.
+2. In the program, on the **Translation** tab, choose **DeepL API**, paste the key and press **Test**.
+
+If you pick a language pair DeepL doesn't support, you'll see an error in the translation popup.
+Use Google Cloud in that case.
+
 ### No-key mode (for trying out only)
 
 If you want to try the program without a key, the **No key** option uses Google Translate's
 public, **unofficial** endpoint (falling back to MyMemory). This endpoint is undocumented, may
 temporarily block IP addresses that send many requests, and may stop working at any time. For
-regular use, choose DeepL or Google Cloud with your own key.
+regular use, choose Google Cloud or DeepL with your own key.
 
 ## Usage
 
@@ -103,6 +103,17 @@ regular use, choose DeepL or Google Cloud with your own key.
 The subtitles are visible while the VLC window is in front and hidden when you switch to another
 window. Fullscreen works too, and the subtitles stay above VLC's playback bar. If you change the
 subtitle delay in VLC (H / G keys), the program follows it.
+
+### Jump to the previous / next subtitle
+
+While VLC is in front, press **A** to go back to the start of the current (or previous) subtitle
+line and **D** to jump to the next one. You can switch to Ctrl / Shift / Alt + ← / → or turn it off
+under **Behavior** on the Home tab. The chosen keys replace their normal function in VLC.
+
+### Flashcards
+
+**Flashcards** on the Home tab shows your Unknown and Learning words (or another group) as cards.
+Click a card (or press Space) to see the translation; ← → move between cards.
 
 ## Appearance
 
@@ -130,12 +141,13 @@ maximum width.
 | `languages.py` | Supported languages |
 | `i18n.py` | Interface language (Turkish / English) |
 | `words_window.py` | My words / Favorites window |
+| `flashcards.py` | Flashcards window |
 | `subtitles.py` | Reading and finding subtitles |
 | `storage.py` | Words, settings and translation cache |
 | `theme.py` | Dark UI theme |
 | `vlc_client.py` | Talking to VLC's web interface |
 | `vlc_setup.py` | Editing VLC's settings file |
-| `osutil.py`, `winutil.py`, `x11util.py` | Following the VLC window (Windows / Linux) |
+| `osutil.py`, `winutil.py`, `x11util.py` | Following the VLC window, shortcut keys (Windows / Linux) |
 
 Personal data lives in the `data/` folder and is not added to git:
 `ayarlar.json` (VLC password, API keys), `kelimeler.json` (colors, favorites; copy this file to

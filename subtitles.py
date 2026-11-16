@@ -97,6 +97,17 @@ class Subtitles:
                 out.append(body)
         return '\n'.join(out)
 
+    def prev_start(self, t, grace=0.5):
+        """Geri atlanacak satırın başı: satırın başından `grace` sn'den fazla geçtiyse
+        aynı satırın başı, yoksa bir öncekinin. Hiç yoksa None."""
+        i = bisect.bisect_right(self.starts, t - grace)
+        return self.starts[i - 1] if i else None
+
+    def next_start(self, t):
+        """t'den sonra başlayan ilk satırın başı. Hiç yoksa None."""
+        i = bisect.bisect_right(self.starts, t + 0.05)
+        return self.starts[i] if i < len(self.starts) else None
+
 
 def _tokens(filename):
     return set(re.split(r'[._\-\s\[\]()]+', filename.lower()))

@@ -1,6 +1,7 @@
 """Windows'a özel yardımcılar: VLC penceresini bulma, odak çalmayan pencereler."""
 import ctypes
 import os
+import threading
 from collections import namedtuple
 from ctypes import wintypes
 
@@ -181,3 +182,72 @@ def dark_titlebar(tk_win):
 def keep_on_top(tk_win):
     user32.SetWindowPos(_hwnd(tk_win), HWND_TOPMOST, 0, 0, 0, 0,
                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE)
+
+
+# -- genel kısayol tuşları ---------------------------------------------
+kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+kernel32.GetCurrentThreadId.restype = wintypes.DWORD
+user32.RegisterHotKey.argtypes = [wintypes.HWND, ctypes.c_int, wintypes.UINT, wintypes.UINT]
+user32.UnregisterHotKey.argtypes = [wintypes.HWND, ctypes.c_int]
+user32.GetMessageW.argtypes = [ctypes.POINTER(wintypes.MSG), wintypes.HWND, wintypes.UINT, wintypes.UINT]
+user32.PeekMessageW.argtypes = [ctypes.POINTER(wintypes.MSG), wintypes.HWND, wintypes.UINT,
+                                wintypes.UINT, wintypes.UINT]
+user32.PostThreadMessageW.argtypes = [wintypes.DWORD, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+
+WM_HOTKEY, WM_APP = 0x0312, 0x8000
+_MODS = {'alt': 0x1, 'ctrl': 0x2, 'shift': 0x4}
+MOD_NOREPEAT = 0x4000
+_VK = {'a': 0x41, 'd': 0x44, 'left': 0x25, 'right': 0x27}
+
+
+class Hotkeys:
+    """Sistem genelinde kısayol tuşları (RegisterHotKey).
+
+    Kayıtlı tuş başka programa gitmez; bu yüzden sadece gerektiğinde (VLC öndeyken)
+    `update(..., active=True)` çağrılmalı. callback kısayol thread'inden çağrılır.
+    """
+
+    def __init__(self, callback):
+        self.callback = callback
+        self._state = ((), False)
+        self._tid = None
+        ready = threading.Event()
+        threading.Thread(target=self._run, args=(ready,), daemon=True).start()
+        ready.wait(2)
+
+    def update(self, bindings, active):
+        """bindings: [(değiştiriciler, tuş, değer)], ör. (('ctrl',), 'left', -1)."""
+        self._state = (tuple(bindings), bool(active))
+        if self._tid:
+            user32.PostThreadMessageW(self._tid, WM_APP, 0, 0)
+
+    def _run(self, ready):
+        msg = wintypes.MSG()
+        self._tid = kernel32.GetCurrentThreadId()
+        user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, 0)  # mesaj kuyruğunu oluştur
+        ready.set()
+        live = {}  # kimlik -> değer
+
+        def apply():
+            for i in live:
+                user32.UnregisterHotKey(None, i)
+            live.clear()
+            bindings, active = self._state
+            if not active:
+                return
+            for i, (mods, key, value) in enumerate(bindings, 1):
+                flags = MOD_NOREPEAT
+                for m in mods:
+                    flags |= _MODS[m]
+                if user32.RegisterHotKey(None, i, flags, _VK[key]):
+                    live[i] = value
+
+        apply()
+        while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
+            if msg.message == WM_APP:
+                apply()
+            elif msg.message == WM_HOTKEY and msg.wParam in live:
+                try:
+                    self.callback(live[msg.wParam])
+                except Exception:
+                    pass

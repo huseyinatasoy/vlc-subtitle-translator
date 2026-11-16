@@ -4,6 +4,7 @@ VLC'de altyazılı video izlerken altyazıyı VLC penceresinin üstünde kendisi
 gösterir; kelimenin üzerine gelince seçtiğin dile çevirisini verir, kelimeleri
 renklere ayırmanı ve favorilemeni sağlar.
 """
+import math
 import os
 import queue
 import secrets
@@ -34,6 +35,7 @@ from subtitles import Subtitles, extract_embedded, find_external  # noqa: E402
 from theme import CARD, CARD2, COLORS, FAV, FONT, MUTED  # noqa: E402
 from translator import TranslateError, translate_sentence  # noqa: E402
 from vlc_client import VLCAuthError, VLCClient, uri_to_path  # noqa: E402
+from flashcards import FlashcardWindow  # noqa: E402
 from words_window import WordsWindow  # noqa: E402
 
 APP_NAME = _('VLC Altyazı Çevirmeni')
@@ -66,6 +68,7 @@ class PlaybackClock:
         self.playing = False
         self.rate = 1.0
         self.delay = 0.0
+        self.pending = None  # (hedef, son tarih): istenen atlama VLC'ye henüz yansımadı
 
     def _at(self, now):
         return self.est + ((now - self.stamp) * self.rate if self.playing else 0.0)
@@ -76,6 +79,14 @@ class PlaybackClock:
         pos = float(st.get('position') or 0)
         now = time.monotonic()
         with self.lock:
+            if self.pending:
+                target, until = self.pending
+                if now < until and abs(t - target) > 1.5:
+                    # VLC henüz atlamadı; eski zamana geri dönüp titremesin
+                    self.est, self.stamp = self._at(now), now
+                    self.playing = st.get('state') == 'playing'
+                    return
+                self.pending = None
             cur = self._at(now)
             if abs(cur - t) > 2:  # atlama (ileri/geri sarma)
                 cur = pos * length if length else t + 0.5
@@ -89,6 +100,13 @@ class PlaybackClock:
         with self.lock:
             now = time.monotonic()
             self.est, self.stamp, self.playing = self._at(now), now, False
+
+    def jump_to(self, t):
+        """VLC'ye t saniyesine atla komutu gönderildi; saati hemen oraya al."""
+        with self.lock:
+            now = time.monotonic()
+            self.est, self.stamp = t, now
+            self.pending = (t, now + 2.0)
 
     def now(self):
         with self.lock:
@@ -167,7 +185,11 @@ class App:
         self.stopping = False
         self.restart = False
         self.words_window = None
+        self.flashcards_window = None
         self._style_job = None
+        self._cue_ref = None  # son atlanan satır başı (art arda basışlar için)
+        self._hotkey_state = None
+        self.hotkeys = osutil.Hotkeys(lambda d: self.post(self.jump_cue, d))
 
         theme.apply(self.root)
         self.ui = self.root.winfo_fpixels('1i') / 96
@@ -252,8 +274,11 @@ class App:
             tk.Label(tile, text=('★ ' if k == 'fav' else '● ') + text, fg=MUTED, bg=CARD2,
                      font=(FONT, 9)).pack(anchor='w')
             self.stat_lbls[k] = num
-        ttk.Button(c, text=_('★  Kelimelerim / Favoriler'), style='Accent.TButton',
-                   command=self.open_words).pack(anchor='w', pady=(12, 0))
+        btns = ttk.Frame(c, style='Card.TFrame')
+        btns.pack(anchor='w', pady=(12, 0))
+        ttk.Button(btns, text=_('★  Kelimelerim / Favoriler'), style='Accent.TButton',
+                   command=self.open_words).pack(side='left')
+        ttk.Button(btns, text=_('❏  Kart oyunu'), command=self.open_flashcards).pack(side='left', padx=(8, 0))
 
         outer, c = theme.card(parent, _('Davranış'))
         outer.pack(fill='x', pady=(8, 0))
@@ -263,6 +288,18 @@ class App:
         self.hide_var = tk.BooleanVar(value=self.settings['hide_vlc_subs'])
         ttk.Checkbutton(c, text=_("VLC'nin kendi altyazısını kapat (çift görünmesin)"), variable=self.hide_var,
                         command=lambda: self._set('hide_vlc_subs', self.hide_var.get())).pack(anchor='w')
+        row = ttk.Frame(c, style='Card.TFrame')
+        row.pack(anchor='w', pady=(8, 0))
+        ttk.Label(row, text=_('Önceki / sonraki altyazı kısayolu'), style='Card.TLabel').pack(side='left')
+        self.cue_choices = [('ad', 'A / D'), ('ctrl', 'Ctrl + ← / →'), ('shift', 'Shift + ← / →'),
+                            ('alt', 'Alt + ← / →'), ('off', _('Kapalı'))]
+        self.cue_var = tk.StringVar(value=dict(self.cue_choices).get(self.settings['cue_keys'], 'A / D'))
+        cue = ttk.Combobox(row, textvariable=self.cue_var, state='readonly', width=16,
+                           values=[lbl for code, lbl in self.cue_choices])
+        cue.pack(side='left', padx=(10, 0))
+        cue.bind('<<ComboboxSelected>>', lambda e: self._cue_keys_chosen())
+        ttk.Label(c, style='CardMuted.TLabel', wraplength=560, justify='left', text=(
+            _("Sadece VLC öndeyken çalışır ve o tuşun VLC'deki işlevinin yerine geçer."))).pack(anchor='w')
         ttk.Label(c, style='CardMuted.TLabel', wraplength=560, justify='left', text=(
             _('Kelimenin üzerine gel → çevirisi çıkar. Biliyorum / Öğreniyorum / Bilmiyorum ile '
             'renklendir, ☆ ile favorile. Favoriler altı çizili görünür.'))).pack(anchor='w', pady=(8, 0))
@@ -402,8 +439,8 @@ class App:
             'saklanır ve sadece seçtiğin servise gönderilir.')))
         outer.pack(fill='x', pady=(8, 0))
         self.provider_var = tk.StringVar(value=self.settings['provider'])
-        for value, text in (('deepl', _('DeepL API (Free ya da Pro anahtarı)')),
-                            ('google', 'Google Cloud Translation API'),
+        for value, text in (('google', _('Google Cloud Translation API (önerilen, ayda 500.000 karakter ücretsiz)')),
+                            ('deepl', _('DeepL API (kendi anahtarın)')),
                             ('free', _('Anahtarsız (resmi değil, sınırlı, her an bozulabilir; sadece denemek için)'))):
             ttk.Radiobutton(c, text=text, value=value, variable=self.provider_var,
                             command=self._provider_chosen).pack(anchor='w', pady=2)
@@ -566,6 +603,44 @@ class App:
         else:
             self.words_window = WordsWindow(self)
 
+    def open_flashcards(self):
+        if self.flashcards_window:
+            self.flashcards_window.win.lift()
+            self.flashcards_window.win.focus_force()
+        else:
+            self.flashcards_window = FlashcardWindow(self)
+
+    # -- önceki / sonraki altyazı ---------------------------------------
+    def _cue_keys_chosen(self):
+        code = next(c for c, lbl in self.cue_choices if lbl == self.cue_var.get())
+        self._set('cue_keys', code)
+        self._hotkey_state = None  # bir sonraki _follow'da yeniden kaydet
+
+    def _update_hotkeys(self, vlc_front):
+        preset = self.settings['cue_keys']
+        active = vlc_front and self.subs is not None and preset in osutil.HOTKEY_PRESETS
+        state = (preset, active)
+        if state != self._hotkey_state:
+            self._hotkey_state = state
+            self.hotkeys.update(osutil.HOTKEY_PRESETS.get(preset, []), active)
+
+    def jump_cue(self, direction):
+        """Bir önceki (-1) ya da bir sonraki (+1) altyazı satırının başına atla."""
+        if not self.subs or self.conn != 'ok' or self.vlc_state not in ('playing', 'paused'):
+            return
+        t = self.clock.now()
+        ref = self._cue_ref
+        if ref is not None and ref - 1.5 <= t < ref + 0.6:
+            t = max(t, ref)  # VLC tam saniyeye atlar; art arda basınca aynı satırda takılma
+        target = self.subs.next_start(t) if direction > 0 else self.subs.prev_start(t)
+        if target is None:
+            return
+        self._cue_ref = target
+        vlc_time = max(0, math.floor(target + self.clock.delay))
+        self.overlay.popup.hide()
+        self.clock.jump_to(vlc_time)
+        self.vlc_cmd('seek', val=vlc_time)
+
     # -- VLC ayarı -----------------------------------------------------
     def _first_run(self):
         if self.settings['password']:
@@ -672,7 +747,9 @@ class App:
 
     def _follow(self):
         try:
-            self.overlay.follow(osutil.find_vlc())
+            info = osutil.find_vlc()
+            self.overlay.follow(info)
+            self._update_hotkeys(bool(info and info.rect and osutil.foreground_pid() == info.pid))
         except Exception:
             log_error(*sys.exc_info())
         self.root.after(250, self._follow)
